@@ -1,6 +1,7 @@
 KERNEL_VERSION = linux-6.12.108
 # Kernel source from the kernel.org CDN (static release tarball).
 KERNEL_REMOTE = https://cdn.kernel.org/pub/linux/kernel/v6.x/$(KERNEL_VERSION).tar.gz
+KERNEL_SHA256 = c4127aa9614a6a829c537cff96a58da634a5f8cfd1aed9d1ba076d3b3a80891a
 KERNEL_TARBALL = tarballs/$(KERNEL_VERSION).tar.gz
 KERNEL_SOURCES = $(KERNEL_VERSION)
 KERNEL_PATCHES = $(shell find patches/ -name "0*.patch" | sort)
@@ -132,6 +133,7 @@ all: $(KRUNFW_BINARY_$(OS))
 $(KERNEL_TARBALL):
 	@mkdir -p tarballs
 	curl --fail --location --retry 5 --retry-delay 2 $(KERNEL_REMOTE) -o $(KERNEL_TARBALL)
+	echo "$(KERNEL_SHA256)  $(KERNEL_TARBALL)" | sha256sum -c -
 
 $(KERNEL_SOURCES): $(KERNEL_TARBALL)
 	tar xf $(KERNEL_TARBALL)
