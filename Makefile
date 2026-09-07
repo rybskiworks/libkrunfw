@@ -1,6 +1,7 @@
 KERNEL_VERSION = linux-6.12.108
 # Kernel source from the kernel.org CDN (static release tarball).
 KERNEL_REMOTE = https://cdn.kernel.org/pub/linux/kernel/v6.x/$(KERNEL_VERSION).tar.gz
+# Kernel.org tarball digest; refresh on KERNEL_VERSION bump.
 KERNEL_SHA256 = c4127aa9614a6a829c537cff96a58da634a5f8cfd1aed9d1ba076d3b3a80891a
 KERNEL_TARBALL = tarballs/$(KERNEL_VERSION).tar.gz
 KERNEL_SOURCES = $(KERNEL_VERSION)

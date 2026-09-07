@@ -1,11 +1,11 @@
-# DRAFT — unvalidated (no nix in authoring env); validate with nix flake check + nix build on a nix host
+# NOTE: unvalidated — run 'nix flake check && nix build' on x86_64-linux.
 {
   description = "libkrunfw — Linux kernel bundled as a shared library (nix draft)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/a799d3e3886da994fa307f817a6bc705ae538eeb";
 
-    # Shared tooling pin (mirrors workestrate); follows the consumer nixpkgs.
+    # Shared tooling pin; follows consumer nixpkgs.
     tooling = {
       url = "github:rybskiworks/nix-tooling/18f8b85f6777240a0ecef4e93ebee69313802aed";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -27,6 +27,7 @@
         let
           pkgs = import inputs.nixpkgs { inherit system; };
 
+          # Must stay in sync with Makefile KERNEL_VERSION/SHA256 and FULL_VERSION.
           kernelVersion = "linux-6.12.108";
           kernelSha256 = "c4127aa9614a6a829c537cff96a58da634a5f8cfd1aed9d1ba076d3b3a80891a";
           kernelTarball = pkgs.fetchurl {
@@ -54,8 +55,7 @@
             version = "5.6.1";
             src = ./.;
 
-            # DRAFT: same list in both attrs while unvalidated (native
-            # x86_64-linux build, so either takes effect); tidy on a nix host.
+            # NOTE: one list for both attrs correct for native x86_64-linux; split if cross-compiling.
             buildInputs = buildDeps;
             nativeBuildInputs = buildDeps;
 
