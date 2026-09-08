@@ -14,3 +14,7 @@ initrd.c
 vmlinux
 /tarballs
 /linux-*
+/.devenv/
+/.pre-commit-config.yaml
+/result
+/result-*
