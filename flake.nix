@@ -1,25 +1,24 @@
-# DRAFT — unvalidated (no nix in authoring env); validate with nix flake check + nix build on a nix host
 {
-  description = "libkrunfw — Linux kernel bundled as a shared library (nix draft)";
+  description = "libkrunfw — Linux kernel bundled as a shared library";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/a799d3e3886da994fa307f817a6bc705ae538eeb";
+    tooling.url = "github:rybskiworks/nix-tooling/eae927a0da5fd04d2dfd2e7876042c6243adba65";
+    nixpkgs.follows = "tooling/nixpkgs";
+    flake-parts.follows = "tooling/flake-parts";
 
-    # Shared tooling pin (mirrors workestrate); follows the consumer nixpkgs.
-    tooling = {
-      url = "github:rybskiworks/nix-tooling/18f8b85f6777240a0ecef4e93ebee69313802aed";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    flake-parts = {
-      url = "github:hercules-ci/flake-parts/9d0d87172c374f89da73c1cfe6d81ae62feac1f1";
-      inputs.nixpkgs-lib.follows = "nixpkgs";
+    devenv.follows = "tooling/devenv";
+    treefmt-nix.follows = "tooling/treefmt-nix";
+    git-hooks.follows = "tooling/git-hooks";
+    devenv-root = {
+      url = "file+file:///dev/null";
+      flake = false;
     };
   };
 
   outputs =
     inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ inputs.devenv.flakeModule ];
       systems = [ "x86_64-linux" ];
 
       perSystem =
@@ -27,6 +26,7 @@
         let
           pkgs = import inputs.nixpkgs { inherit system; };
 
+          # Must stay in sync with Makefile KERNEL_VERSION/SHA256 and FULL_VERSION.
           kernelVersion = "linux-6.12.108";
           kernelSha256 = "c4127aa9614a6a829c537cff96a58da634a5f8cfd1aed9d1ba076d3b3a80891a";
           kernelTarball = pkgs.fetchurl {
@@ -36,28 +36,36 @@
 
           # Kernel + bundle build tools (mirrors README Debian/Ubuntu reqs).
           buildDeps = with pkgs; [
-            gcc
             gnumake
             bc
             bison
             flex
-            elfutils
             cpio
             xz
-            python3
-            python3Packages.pyelftools
+            (python3.withPackages (pythonPackages: [ pythonPackages.pyelftools ]))
             patch
           ];
 
           libkrunfw = pkgs.stdenv.mkDerivation {
             pname = "libkrunfw";
             version = "5.6.1";
-            src = ./.;
+            src = pkgs.lib.fileset.toSource {
+              root = ./.;
+              fileset = pkgs.lib.fileset.unions [
+                ./Makefile
+                ./bin2cbundle.py
+                ./scripts
+                ./patches
+                ./config-libkrunfw_x86_64
+              ];
+            };
 
-            # DRAFT: same list in both attrs while unvalidated (native
-            # x86_64-linux build, so either takes effect); tidy on a nix host.
-            buildInputs = buildDeps;
+            buildInputs = [ pkgs.elfutils ];
             nativeBuildInputs = buildDeps;
+
+            postPatch = ''
+              patchShebangs scripts
+            '';
 
             buildPhase = ''
               runHook preBuild
@@ -74,6 +82,11 @@
               install -m 755 libkrunfw.so.5.6.1 $out/lib/
               ln -s libkrunfw.so.5.6.1 $out/lib/libkrunfw.so.5
               ln -s libkrunfw.so.5 $out/lib/libkrunfw.so
+              mkdir -p $out/share/libkrunfw
+              install -m 644 ${kernelVersion}/.config $out/share/libkrunfw/kernel.config
+              install -m 644 ${kernelVersion}/include/config/kernel.release $out/share/libkrunfw/kernel.release
+              echo "${kernelSha256}  ${kernelVersion}.tar.gz" > $out/share/libkrunfw/kernel-source.sha256
+              sha256sum patches/0*.patch > $out/share/libkrunfw/kernel-patches.sha256
               runHook postInstall
             '';
           };
@@ -82,22 +95,27 @@
           packages.libkrunfw = libkrunfw;
           packages.default = libkrunfw;
 
-          devShells.default = pkgs.mkShell {
-            packages = buildDeps;
-            shellHook = ''
-              echo "libkrunfw nix draft shell (unvalidated — see flake.nix header)"
-            '';
+          _module.args.pkgs = pkgs;
+
+          devenv.shells.default = {
+            containers = pkgs.lib.mkForce { };
+            imports = [
+              inputs.tooling.devenvModules.base
+              inputs.tooling.devenvModules.nix
+            ];
+            packages = buildDeps ++ [
+              pkgs.elfutils
+              pkgs.curl
+            ];
           };
 
-          checks.verify-libkrunfw-symbols = pkgs.runCommand "libkrunfw-verify-symbols"
-            { nativeBuildInputs = [ pkgs.binutils ]; }
-            ''
-              mkdir -p $out
-              so=${libkrunfw}/lib/libkrunfw.so.5.6.1
-              test -f "$so"
-              (nm -D "$so" | grep -q krunfw_get_version || strings "$so" | grep -q krunfw_get_version)
-              touch $out/ok
-            '';
+          checks.verify-libkrunfw-symbols =
+            pkgs.runCommand "libkrunfw-verify-symbols" { nativeBuildInputs = [ pkgs.python3 ]; }
+              ''
+                mkdir -p $out
+                python3 ${./tests/check-library.py} ${libkrunfw}/lib/libkrunfw.so.5.6.1
+                touch $out/ok
+              '';
         };
     };
 }

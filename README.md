@@ -6,6 +6,33 @@ By having the kernel bundled in a dynamic library, ```libkrun``` can leave to th
 
 ## Building
 
+### Nix (x86_64 Linux, generic variant)
+
+```sh
+nix build .#libkrunfw
+nix build .#checks.x86_64-linux.verify-libkrunfw-symbols
+```
+
+The kernel tarball is fetched by Nix with a fixed digest before the build; the
+kernel build itself requires no network. The check loads the installed library,
+calls `krunfw_get_version` and `krunfw_get_kernel`, and verifies ABI 5 plus nonempty,
+aligned kernel bundle metadata. It does not boot a VM.
+
+The actual kernel configuration, release, source digest, and patch digests are
+installed under `share/libkrunfw` for identifying the firmware build.
+
+The development shell imports the shared `nix-tooling` devenv modules. Supply the
+writable checkout path for pure shell evaluation:
+
+```sh
+mkdir -p .devenv
+printf '%s' "$(pwd -P)" > .devenv/root
+nix develop --override-input devenv-root "file+file://$PWD/.devenv/root"
+```
+
+Use the same root override when evaluating the complete flake, including devenv's
+shell checks.
+
 ### Linux (generic variant)
 
 #### Requirements
