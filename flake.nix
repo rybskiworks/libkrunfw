@@ -114,6 +114,27 @@
               ''
                 mkdir -p $out
                 python3 ${./tests/check-library.py} ${libkrunfw}/lib/libkrunfw.so.5.6.1
+                grep -Fx 'CONFIG_POWER_RESET=y' ${libkrunfw}/share/libkrunfw/kernel.config
+                grep -Fx 'CONFIG_POWER_RESET_LIBKRUN=y' ${libkrunfw}/share/libkrunfw/kernel.config
+                touch $out/ok
+              '';
+
+          checks.verify-poweroff-driver =
+            pkgs.runCommand "libkrunfw-verify-poweroff-driver"
+              {
+                nativeBuildInputs = [
+                  pkgs.python3
+                  pkgs.stdenv.cc
+                  pkgs.patch
+                ];
+              }
+              ''
+                python3 ${./tests/check-poweroff.py} \
+                  --kernel-source ${kernelTarball} \
+                  --patch ${./patches}/0035-power-reset-add-libkrun-x86-poweroff.patch \
+                  --patch-directory ${./patches} \
+                  --config ${./config-libkrunfw_x86_64}
+                mkdir -p $out
                 touch $out/ok
               '';
         };

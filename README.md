@@ -21,6 +21,34 @@ aligned kernel bundle metadata. It does not boot a VM.
 The actual kernel configuration, release, source digest, and patch digests are
 installed under `share/libkrunfw` for identifying the firmware build.
 
+### Generic x86 power-off
+
+The generic x86_64 configuration enables `CONFIG_POWER_RESET_LIBKRUN`.
+Its Linux platform power-off callback runs after the normal kernel shutdown
+sequence and writes `0xfe` to the emulated i8042 command port `0x64`. In
+libkrun, this signals the VMM exit event; it does not reset and boot the guest
+again. The callback remains halted while the host consumes that event, without
+returning into the firmware's PID1-exit restart path.
+
+This driver is specific to libkrun's device contract. Do not enable it for a
+general-purpose physical-PC kernel, where the same i8042 command can reset the
+machine. The other architecture, Windows, SEV and TDX configurations are
+unchanged. The library ABI and SONAME remain version 5.
+
+```sh
+nix build .#checks.x86_64-linux.verify-poweroff-driver
+```
+
+This small check applies the patch to the pinned kernel's power-reset sources
+and compiles the actual callback against fake I/O and registration functions.
+It checks successful and failed registration, exact byte/port selection, and
+the nonreturning halt loop without executing privileged host instructions.
+It also checks added payload whitespace in every kernel patch, with negative
+controls, while allowing the required unified-diff context prefixes.
+The library check also verifies the installed kernel configuration. Neither
+check establishes actual guest power-off: that requires a guest shutdown,
+completed storage flush, and VMM exit before any host timeout fallback.
+
 The development shell imports the shared `nix-tooling` devenv modules. Supply the
 writable checkout path for pure shell evaluation:
 

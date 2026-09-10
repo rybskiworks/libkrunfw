@@ -6,3 +6,7 @@
 *.yml text eol=lf
 *.yaml text eol=lf
 Makefile text eol=lf
+
+# Unified-diff context prefixes are data. The poweroff check validates added
+# payload whitespace in every kernel patch instead of interpreting its prefix.
+patches/*.patch whitespace=-blank-at-eol,-space-before-tab

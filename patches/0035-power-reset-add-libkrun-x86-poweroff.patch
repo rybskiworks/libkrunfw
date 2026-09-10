@@ -1,0 +1,73 @@
+Subject: [PATCH] power: reset: add libkrun x86 platform poweroff
+
+Register a platform power-off callback for libkrun's x86 exit device.
+Unlike a physical i8042, libkrun terminates the VMM when the guest writes
+the reset command; it does not reset and restart the guest. Keep this
+driver opt-in and enable it only in the generic x86 firmware config.
+
+Remain halted after requesting exit so an asynchronous host event cannot
+race a return into the firmware's PID1-exit orderly-reboot path.
+
+--- a/drivers/power/reset/Kconfig
++++ b/drivers/power/reset/Kconfig
+@@ -9,6 +9,18 @@ menuconfig POWER_RESET
+ 
+ if POWER_RESET
+ 
++config POWER_RESET_LIBKRUN
++	bool "libkrun x86 virtual machine power-off"
++	depends on X86_64
++	help
++	  Register a power-off handler for libkrun's emulated i8042 exit
++	  device. Writing its reset command terminates the VMM rather
++	  than rebooting the guest. No ACPI power management is required.
++
++	  Enable only for kernels dedicated to libkrun's generic x86
++	  virtual machine. On physical PCs this command can reset the
++	  machine; this is not a general-purpose PC power-off driver.
++
+ config POWER_RESET_AS3722
+ 	bool "ams AS3722 power-off driver"
+ 	depends on MFD_AS3722
+--- a/drivers/power/reset/Makefile
++++ b/drivers/power/reset/Makefile
+@@ -1,3 +1,4 @@
+ # SPDX-License-Identifier: GPL-2.0
++obj-$(CONFIG_POWER_RESET_LIBKRUN) += libkrun-poweroff.o
+ obj-$(CONFIG_POWER_RESET_AS3722) += as3722-poweroff.o
+ obj-$(CONFIG_POWER_RESET_AT91_POWEROFF) += at91-poweroff.o
+--- /dev/null
++++ b/drivers/power/reset/libkrun-poweroff.c
+@@ -0,0 +1,32 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/* Power-off for libkrun's generic x86 virtual machine, not physical PCs. */
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/reboot.h>
++#include <asm/irqflags.h>
++
++#define LIBKRUN_I8042_COMMAND_PORT 0x64
++#define LIBKRUN_I8042_EXIT_COMMAND 0xfe
++
++static void libkrun_power_off(void)
++{
++	/*
++	 * libkrun connects this command to its VMM exit event, not a
++	 * virtual-machine reset. The normal kernel shutdown sequence has
++	 * already stopped devices and the other CPUs before this callback.
++	 */
++	native_irq_disable();
++	outb(LIBKRUN_I8042_EXIT_COMMAND, LIBKRUN_I8042_COMMAND_PORT);
++
++	/* Do not return into PID1 exit while the host consumes the event. */
++	for (;;)
++		native_halt();
++}
++
++static int __init libkrun_power_off_init(void)
++{
++	/* Use the normal sys-off chain; do not replace restart or halt. */
++	return register_platform_power_off(libkrun_power_off);
++}
++
++device_initcall(libkrun_power_off_init);
