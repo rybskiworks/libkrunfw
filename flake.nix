@@ -27,8 +27,8 @@
           pkgs = import inputs.nixpkgs { inherit system; };
 
           # Must stay in sync with Makefile KERNEL_VERSION/SHA256 and FULL_VERSION.
-          kernelVersion = "linux-6.12.108";
-          kernelSha256 = "c4127aa9614a6a829c537cff96a58da634a5f8cfd1aed9d1ba076d3b3a80891a";
+          kernelVersion = "linux-6.12.109";
+          kernelSha256 = "e81af28f5941db1c7f356151dfbab2ca5786c8be76474f7d42ea306cdeb445cd";
           kernelTarball = pkgs.fetchurl {
             url = "https://cdn.kernel.org/pub/linux/kernel/v6.x/${kernelVersion}.tar.gz";
             sha256 = kernelSha256;
@@ -108,6 +108,31 @@
               pkgs.curl
             ];
           };
+
+          checks.verify-source-pins = pkgs.runCommand "libkrunfw-verify-source-pins" { } ''
+            grep -Fx 'KERNEL_VERSION = ${kernelVersion}' ${./Makefile}
+            grep -Fx 'KERNEL_SHA256 = ${kernelSha256}' ${./Makefile}
+            mkdir -p $out
+            touch $out/ok
+          '';
+
+          checks.verify-clock-only =
+            pkgs.runCommandCC "libkrunfw-verify-clock-only"
+              {
+                nativeBuildInputs = [ pkgs.gawk ];
+                src = pkgs.lib.fileset.toSource {
+                  root = ./.;
+                  fileset = pkgs.lib.fileset.unions [
+                    ./tests/clock-only
+                    ./patches/0034-virtio-add-microsandbox-vm-generation-driver.patch
+                  ];
+                };
+              }
+              ''
+                bash $src/tests/clock-only/run.sh
+                mkdir -p $out
+                touch $out/ok
+              '';
 
           checks.verify-libkrunfw-symbols =
             pkgs.runCommand "libkrunfw-verify-symbols" { nativeBuildInputs = [ pkgs.python3 ]; }
