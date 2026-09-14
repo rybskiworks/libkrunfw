@@ -46,19 +46,30 @@
             patch
           ];
 
+          # The same immutable snapshot supplies compilation and corresponding source.
+          # Exclude TEE/qboot/initrd binaries: this output is generic x86_64 only.
+          sourceSnapshot = pkgs.lib.fileset.toSource {
+            root = ./.;
+            fileset = pkgs.lib.fileset.unions [
+              ./Makefile
+              ./bin2cbundle.py
+              ./scripts
+              ./patches
+              ./tests
+              ./config-libkrunfw_x86_64
+              ./LICENSE-GPL-2.0-only
+              ./LICENSE-LGPL-2.1-only
+              ./README.md
+              ./DISTRIBUTION.md
+              ./flake.nix
+              ./flake.lock
+            ];
+          };
+
           libkrunfw = pkgs.stdenv.mkDerivation {
             pname = "libkrunfw";
             version = "5.6.1";
-            src = pkgs.lib.fileset.toSource {
-              root = ./.;
-              fileset = pkgs.lib.fileset.unions [
-                ./Makefile
-                ./bin2cbundle.py
-                ./scripts
-                ./patches
-                ./config-libkrunfw_x86_64
-              ];
-            };
+            src = sourceSnapshot;
 
             buildInputs = [ pkgs.elfutils ];
             nativeBuildInputs = buildDeps;
@@ -89,11 +100,35 @@
               sha256sum patches/0*.patch > $out/share/libkrunfw/kernel-patches.sha256
               runHook postInstall
             '';
+
+            # Bind evidence to the final binary, after stripping/patchelf fixups.
+            postFixup = ''
+              python3 ${./scripts/licensing/source_bundle.py} build \
+                --source ${sourceSnapshot} \
+                --kernel ${kernelTarball} \
+                --config $out/share/libkrunfw/kernel.config \
+                --release $out/share/libkrunfw/kernel.release \
+                --binary $out/lib/libkrunfw.so.5.6.1 \
+                --output $out/share/libkrunfw/compliance
+            '';
+
+            passthru.licensing = {
+              schema = 1;
+              profile = "generic-x86_64";
+            };
+            meta.license = with pkgs.lib.licenses; [
+              lgpl21Only
+              gpl2Only
+            ];
           };
         in
         {
           packages.libkrunfw = libkrunfw;
           packages.default = libkrunfw;
+          packages.corresponding-source = pkgs.runCommand "libkrunfw-corresponding-source" { } ''
+            mkdir -p $out
+            cp -r ${libkrunfw}/share/libkrunfw/compliance/. $out/
+          '';
 
           _module.args.pkgs = pkgs;
 
@@ -108,6 +143,19 @@
               pkgs.curl
             ];
           };
+
+          checks.licensing-unit = pkgs.runCommand "libkrunfw-licensing-unit" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+            export PYTHONDONTWRITEBYTECODE=1
+            cd ${sourceSnapshot}
+            python3 -m unittest discover -s tests/licensing -v
+            mkdir -p $out
+          '';
+          checks.verify-distribution = pkgs.runCommand "libkrunfw-verify-distribution" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+            python3 ${./scripts/licensing/source_bundle.py} verify \
+              --bundle ${libkrunfw}/share/libkrunfw/compliance \
+              --binary ${libkrunfw}/lib/libkrunfw.so.5.6.1
+            mkdir -p $out
+          '';
 
           checks.verify-source-pins = pkgs.runCommand "libkrunfw-verify-source-pins" { } ''
             grep -Fx 'KERNEL_VERSION = ${kernelVersion}' ${./Makefile}
