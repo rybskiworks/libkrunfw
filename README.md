@@ -21,6 +21,15 @@ aligned kernel bundle metadata. It does not boot a VM.
 The actual kernel configuration, release, source digest, and patch digests are
 installed under `share/libkrunfw` for identifying the firmware build.
 
+### Guest swap
+
+The generic x86_64 kernel enables `CONFIG_SWAP`, allowing guests to activate a
+swap partition or swap file on a supported writable filesystem. The guest
+image provisions and activates its own swap; the firmware supplies the kernel
+support. `verify-libkrunfw-symbols` checks the installed kernel configuration.
+Runtime acceptance requires booting the firmware and verifying successful
+`swapon`, a matching entry in `/proc/swaps`, and `swapoff` in a disposable guest.
+
 ### Generic x86 power-off
 
 The generic x86_64 configuration enables `CONFIG_POWER_RESET_LIBKRUN`.
