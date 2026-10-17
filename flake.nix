@@ -189,6 +189,7 @@
                 python3 ${./tests/check-library.py} ${libkrunfw}/lib/libkrunfw.so.5.6.1
                 grep -Fx 'CONFIG_POWER_RESET=y' ${libkrunfw}/share/libkrunfw/kernel.config
                 grep -Fx 'CONFIG_POWER_RESET_LIBKRUN=y' ${libkrunfw}/share/libkrunfw/kernel.config
+                grep -Fx 'CONFIG_SWAP=y' ${libkrunfw}/share/libkrunfw/kernel.config
                 touch $out/ok
               '';
 
